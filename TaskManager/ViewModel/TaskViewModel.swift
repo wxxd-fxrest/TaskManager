@@ -8,16 +8,7 @@
 import SwiftUI
 
 class TaskViewModel: ObservableObject {
-    // Sample Tasks
-    @Published var storedTasks: [Task] = [
-        Task(taskTitle: "다이어트", taskDescription: "제발 좀 해", taskDate: .init(timeIntervalSince1970: 1700570600)),
-        Task(taskTitle: "운동", taskDescription: "아침 조깅", taskDate: .init(timeIntervalSince1970: 1700593200)),
-        Task(taskTitle: "공부", taskDescription: "Swift 공부", taskDate: .init(timeIntervalSince1970: 1700596800)),
-        Task(taskTitle: "요리", taskDescription: "저녁 준비", taskDate: .init(timeIntervalSince1970: 1700600400)),
-        Task(taskTitle: "청소", taskDescription: "집 청소하기", taskDate: .init(timeIntervalSince1970: 1700604000)),
-        Task(taskTitle: "독서", taskDescription: "책 읽기", taskDate: .init(timeIntervalSince1970: 1700607600))
-    ]
-    
+
     // MARK: - Current Week Days
     @Published var currentWeek: [Date] = []
     
@@ -27,28 +18,15 @@ class TaskViewModel: ObservableObject {
     // MARK: - Filtering Today Tasks
     @Published var filteredTasks: [Task]?
     
+    // MARK: - New Task View
+    @Published var addNewTask: Bool = false
+    
+    // MARK: - Edit Data
+    @Published var editTask: Task? 
+    
     // MARK: - Intializing
     init() {
         fetchCurrentWeek()
-        filterTodayTasks()
-    }
-    
-    // MARK: - Filter Today Tasks
-    func filterTodayTasks() {
-        DispatchQueue.global(qos: .userInteractive).async {
-            let calendar = Calendar.current
-            let filtered = self.storedTasks.filter {
-                return calendar.isDate($0.taskDate, inSameDayAs: self.currentDay)
-            }
-                .sorted { task1, task2 in
-                    return task2.taskDate < task1.taskDate
-                }
-            DispatchQueue.main.async {
-                withAnimation {
-                    self.filteredTasks = filtered
-                }
-            }
-        }
     }
     
     func fetchCurrentWeek() {

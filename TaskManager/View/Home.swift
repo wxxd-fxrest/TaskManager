@@ -11,6 +11,12 @@ struct Home: View {
     @StateObject var taskModel: TaskViewModel = TaskViewModel()
     @Namespace var animation
     
+    // MARK: - Core Data Context
+    @Environment(\.managedObjectContext) var context
+    
+    // MARK: - Edit Button Context
+    @Environment(\.editMode) var editButton
+    
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             // MARK: - Lazy Stack With Pinned Header
@@ -68,105 +74,132 @@ struct Home: View {
             }
         }
         .ignoresSafeArea(.container, edges: .top)
+        // MARK: - Add Button
+        .overlay(
+            Button(action: {
+                taskModel.addNewTask.toggle()
+            }, label: {
+                Image(systemName: "plus")
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.black, in: Circle())
+            })
+            .padding(), alignment: .bottomTrailing
+        )
+        .sheet(isPresented: $taskModel.addNewTask) {
+            // Clearing Edit Data
+            taskModel.editTask = nil
+        } content: {
+            NewTask().environmentObject(taskModel)
+        }
     }
     
     // MARK: - Tasks View
     func TasksView() -> some View {
         LazyVStack(spacing: 20) {
-            //            if let tasks = taskModel.filteredTasks {
-            //                if tasks.isEmpty {
-            //                    Text("없어")
-            //                        .font(.system(size: 16))
-            //                        .fontWeight(.light)
-            //                        .offset(y: 100)
-            //                } else {
-            //                    ForEach(tasks) { task in
-            //                        TaskCardView(task: task)
-            //                    }
-            //                }
-            //            } else {
-            //                // MARK: - Progress View
-            //                ProgressView().offset(y: 100)
-            //            }
-            //        }
-            ForEach(taskModel.storedTasks) { task in
-                TaskCardView(task: task)
+            // Converting object as Our Task Model
+            DynamicFilteredView(dateToFilter: taskModel.currentDay) { (object: Task) in
+                TaskCardView(task: object)
             }
         }
         .padding()
         .padding(.top)
-        // MARK: - Updating Tasks
-        .onChange(of: taskModel.currentDay) { newValue in
-            taskModel.filterTodayTasks()
-        }
     }
     
     // MARK: - Task Card View
     func TaskCardView(task: Task) -> some View {
-        HStack(alignment: .top, spacing: 30) {
-            VStack(spacing: 10) {
-                Circle()
-                    .fill(taskModel.isCurrentHour(date: task.taskDate) ? .black : .clear)
-                    .frame(width: 15, height: 15)
-                    .background(
-                        Circle()
-                            .stroke(.black, lineWidth: 1)
-                            .padding(-3)
-                    )
-                    .scaleEffect(taskModel.isCurrentHour(date: task.taskDate) ? 0.8 : 1)
-                Rectangle()
-                    .fill(.black)
-                    .frame(width: 3)
+        // MARK: - Since CoreData Values will Give Optinal data
+        HStack(alignment: editButton?.wrappedValue == .active ? .center : .top, spacing: 30) {
+            // If Edit mode enabled then showing Delete Button
+            if editButton?.wrappedValue == .active {
+                // Edit Button & Delete Button
+                VStack(spacing: 10) {
+                    // MARK: - Deleting Task
+                    Button {
+                        context.delete(task)
+                        // Saving
+                        try? context.save()
+                        
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                    }
+                    
+                    // MARK: - Editing Task
+                    if (task.taskDate ?? Date()) >= Date() {
+                        Button {
+                            taskModel.editTask = task
+                            taskModel.addNewTask.toggle()
+                        } label: {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+            } else {
+                VStack(spacing: 10) {
+                    Circle()
+                        .fill(taskModel.isCurrentHour(date: task.taskDate ?? Date()) ? (task.isCompleted ? .green : .black) : .clear)
+                        .frame(width: 15, height: 15)
+                        .background(
+                            Circle()
+                                .stroke(.black, lineWidth: 1)
+                                .padding(-3)
+                        )
+                        .scaleEffect(taskModel.isCurrentHour(date: task.taskDate ?? Date()) ? 0.8 : 1)
+                    Rectangle()
+                        .fill(.black)
+                        .frame(width: 3)
+                }
             }
+            
             VStack {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(task.taskTitle).font(.title2.bold())
-                        Text(task.taskDescription).font(.callout).foregroundStyle(.secondary)
+                        Text(task.taskTitle ?? "").font(.title2.bold())
+                        Text(task.taskDescription ?? "").font(.callout).foregroundStyle(.secondary)
                     }
                     .headerLeading()
-                    Text(task.taskDate.formatted(date: .omitted, time: .shortened))
+                    Text(task.taskDate?.formatted(date: .omitted, time: .shortened) ?? "")
                 }
                 
-                if taskModel.isCurrentHour(date: task.taskDate) {
+                if taskModel.isCurrentHour(date: task.taskDate ?? Date()) {
                     // MARK: - Team Members
                     HStack(spacing: 0) {
-                        HStack(spacing: -10) {
-                            ForEach(["Use1", "User2", "User3"], id: \.self) { user in
-                                Image("Group 606")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 45, height: 45)
-                                    .clipShape(Circle())
-                                    .background(
-                                        Circle()
-                                            .stroke(.black, lineWidth: 1)
-                                    )
+                        // MARK: - Check Button
+                        if task.isCompleted {
+                            Button {
+                                // MARK: - Updating Task
+                                task.isCompleted = true
+                                
+                                // Saving
+                                try? context.save()
+                            } label: {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.black)
+                                    .padding(10)
+                                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
                             }
                         }
-                        .headerLeading()
                         
-                        // MARK: - Check Button
-                        Button {
-                            
-                        } label: {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.black)
-                                .padding(10)
-                                .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
-                        }
+                        Text(task.isCompleted ? "Mark as Completed" : "Mark Task as Completed")
+                            .font(.system(size: task.isCompleted ? 14 : 16, weight: .light))
+                            .foregroundColor(task.isCompleted ? .gray : .white)
+                            .headerLeading()
                     }
                     .padding(.top)
                 }
             }
-            .foregroundColor(taskModel.isCurrentHour(date: task.taskDate) ? .white : .black)
-            .padding(taskModel.isCurrentHour(date: task.taskDate) ? 15 : 0)
-            .padding(.bottom, taskModel.isCurrentHour(date: task.taskDate) ? 0 : 15)
+            .foregroundColor(taskModel.isCurrentHour(date: task.taskDate ?? Date()) ? .white : .black)
+            .padding(taskModel.isCurrentHour(date: task.taskDate ?? Date()) ? 15 : 0)
+            .padding(.bottom, taskModel.isCurrentHour(date: task.taskDate ?? Date()) ? 0 : 15)
             .headerLeading()
             .background(
                 Color(.black)
                     .cornerRadius(25)
-                    .opacity(taskModel.isCurrentHour(date: task.taskDate)  ? 1 : 0)
+                    .opacity(taskModel.isCurrentHour(date: task.taskDate ?? Date())  ? 1 : 0)
             )
         }
         .headerLeading()
@@ -183,15 +216,8 @@ struct Home: View {
             }
             .headerLeading()
             
-            Button {
-                
-            } label: {
-            Image("Group 606")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 45, height: 45)
-                    .clipShape(Circle())
-            }
+            // MARK: - Edit Button
+            EditButton()
         }
         .padding()
         .padding(.top, getSageArea().top)
